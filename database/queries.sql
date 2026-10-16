@@ -66,3 +66,19 @@ SELECT bank_id, name, available, ROUND(dist_km, 1) AS dist_km,
   + (1 - CASE urgency WHEN 'critical' THEN .7 WHEN 'urgent' THEN .5 ELSE .35 END) * LEAST(1, available / (units * 4))
   , 3) AS score
 FROM cand ORDER BY score DESC LIMIT 5;
+SELECT * FROM (
+  SELECT d.id, u.name, d.blood_group, d.city, r.urgency,
+         ROUND(ST_Distance_Sphere(POINT(d.longitude, d.latitude), POINT(h.longitude, h.latitude)) / 1000, 1) AS dist_km
+  FROM emergency_requests r
+  JOIN hospitals h ON h.id = r.hospital_id
+  JOIN blood_compatibility c ON c.recipient_group = r.blood_group
+  JOIN donors d ON d.blood_group = c.donor_group
+  JOIN users u ON u.id = d.user_id
+  WHERE r.id = 1 AND d.eligible = 1 AND d.available = 1
+    AND d.latitude  BETWEEN h.latitude  - 1.1  AND h.latitude  + 1.1
+    AND d.longitude BETWEEN h.longitude - 1.25 AND h.longitude + 1.25
+    AND (d.last_donation IS NULL
+         OR d.last_donation <= CURDATE() - INTERVAL IF(d.sex = 'M', 90, 120) DAY)
+) t
+WHERE dist_km <= IF(urgency = 'critical', 120, 60)
+ORDER BY dist_km LIMIT 12;
