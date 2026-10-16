@@ -41,3 +41,28 @@ SELECT blood_group, city, COUNT(*) AS donors FROM donors GROUP BY blood_group, c
 SELECT r.id, l.status, l.note, l.created_at
 FROM emergency_requests r JOIN request_logs l ON l.request_id = r.id
 WHERE r.id = 1 ORDER BY l.id;
+WITH req AS (
+  SELECT r.id, r.blood_group, r.units, r.urgency, h.latitude AS hlat, h.longitude AS hlon
+  FROM emergency_requests r JOIN hospitals h ON h.id = r.hospital_id
+  WHERE r.id = 1
+),
+stock AS (
+  SELECT i.bank_id, SUM(i.units) AS available
+  FROM req
+  JOIN blood_compatibility c ON c.recipient_group = req.blood_group
+  JOIN blood_inventory i ON i.blood_group = c.donor_group
+  GROUP BY i.bank_id
+),
+cand AS (
+  SELECT b.id AS bank_id, b.name, s.available, req.units, req.urgency,
+         ST_Distance_Sphere(POINT(b.longitude, b.latitude), POINT(req.hlon, req.hlat)) / 1000 AS dist_km
+  FROM req
+  JOIN stock s ON s.available >= req.units
+  JOIN blood_banks b ON b.id = s.bank_id
+)
+SELECT bank_id, name, available, ROUND(dist_km, 1) AS dist_km,
+  ROUND(
+    (CASE urgency WHEN 'critical' THEN .7 WHEN 'urgent' THEN .5 ELSE .35 END) * GREATEST(0, 1 - dist_km / 400)
+  + (1 - CASE urgency WHEN 'critical' THEN .7 WHEN 'urgent' THEN .5 ELSE .35 END) * LEAST(1, available / (units * 4))
+  , 3) AS score
+FROM cand ORDER BY score DESC LIMIT 5;
