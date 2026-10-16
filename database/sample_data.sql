@@ -17,3 +17,10 @@ INSERT INTO donors(user_id,blood_group,city,age) VALUES
 
 INSERT INTO blood_inventory(bank_id,blood_group,units) VALUES
 (1,'A+',8),(1,'B+',5),(1,'O+',10),(1,'O-',2),(1,'AB-',0);
+USE lifelink;
+
+INSERT INTO emergency_requests(hospital_id,blood_group,units,urgency)
+VALUES (1,'AB-',3,'critical');
+
+INSERT INTO request_logs(request_id,status,note)
+VALUES (1,'pending','Request raised');
