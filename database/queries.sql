@@ -1,0 +1,43 @@
+USE lifelink;
+
+-- Q1: total stock per blood group across all banks
+SELECT blood_group, SUM(units) AS total_units
+FROM blood_inventory GROUP BY blood_group ORDER BY blood_group;
+
+-- Q2: blood groups running low (fewer than 5 units in total)
+SELECT blood_group, SUM(units) AS total_units
+FROM blood_inventory GROUP BY blood_group HAVING SUM(units) < 5;
+
+-- Q3: number of requests by status
+SELECT status, COUNT(*) AS total FROM emergency_requests GROUP BY status;
+
+-- Q4: open requests with hospital details, most urgent first
+SELECT r.id, h.name AS hospital, h.city, r.blood_group, r.units, r.urgency, r.status
+FROM emergency_requests r
+JOIN hospitals h ON h.id = r.hospital_id
+WHERE r.status IN ('pending','matched')
+ORDER BY FIELD(r.urgency,'critical','urgent','normal'), r.created_at;
+
+-- Q5: eligible donors for request 1 (compatible group, available, 90-day gap), same city first
+SELECT d.id, u.name, d.blood_group, d.city, (d.city <> h.city) AS distance_score
+FROM emergency_requests r
+JOIN hospitals h ON h.id = r.hospital_id
+JOIN blood_compatibility c ON c.recipient_group = r.blood_group
+JOIN donors d ON d.blood_group = c.donor_group
+JOIN users u ON u.id = d.user_id
+WHERE r.id = 1 AND d.available = 1
+  AND (d.last_donation IS NULL OR d.last_donation <= CURDATE() - INTERVAL 90 DAY)
+ORDER BY distance_score, (d.blood_group = r.blood_group) DESC;
+
+-- Q6: blood banks that have O+ in stock (subquery)
+
+SELECT name, city FROM blood_banks
+WHERE id IN (SELECT bank_id FROM blood_inventory WHERE blood_group = 'O+' AND units > 0);
+
+-- Q7: donors per blood group and city
+SELECT blood_group, city, COUNT(*) AS donors FROM donors GROUP BY blood_group, city;
+
+-- Q8: full history of one request
+SELECT r.id, l.status, l.note, l.created_at
+FROM emergency_requests r JOIN request_logs l ON l.request_id = r.id
+WHERE r.id = 1 ORDER BY l.id;
